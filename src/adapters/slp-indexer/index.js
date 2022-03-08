@@ -421,7 +421,7 @@ class SlpIndexer {
       console.log(`targetBlockHeight: ${targetBlockHeight}`)
 
       // Round the hight to the nearest 50
-      const rollbackHeight = Math.floor(targetBlockHeight / EPOCH) * EPOCH
+      const rollbackHeight = Math.floor(730200)//targetBlockHeight / EPOCH) * EPOCH
       console.log(
         `Rolling database back to this block height: ${rollbackHeight}`
       )
