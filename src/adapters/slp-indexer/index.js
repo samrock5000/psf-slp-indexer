@@ -140,8 +140,8 @@ class SlpIndexer {
         blockHeight++
         biggestBlockHeight = await this.rpc.getBlockCount()
       } while (blockHeight <= biggestBlockHeight)
-      // } while (blockHeight < 730199)
-      // } while (blockHeight < 730296)
+      // } while (blockHeight < 638340)
+      // } while (blockHeight < 738971)
       // console.log('Target block height reached.')
       // process.exit(0)
 
@@ -276,6 +276,38 @@ class SlpIndexer {
         } transactions. ${now.toLocaleString()}`
       )
 
+      // Filter and sort block transactions, to make indexing more efficient
+      // and easier to debug.
+      const filteredTxs = await this.filterBlock.filterAndSortSlpTxs2(
+        txs,
+        blockHeight
+      )
+      const slpTxs = filteredTxs.combined
+      const nonSlpTxs = filteredTxs.nonSlpTxs
+      // console.log(`slpTxs: ${JSON.stringify(slpTxs, null, 2)}`)
+
+      // If the block has no txs after filtering for SLP txs, then return.
+      if (!slpTxs || !slpTxs.length) return
+
+      console.log(`slpTxs: ${slpTxs.length}`)
+
+      // Progressively processes TXs in the array.
+      await this.processSlpTxs(slpTxs, blockHeight)
+
+      // Do a second round of this.filterBlock.deleteBurnedUtxos() for
+      // all non-SLP transactions. Handles corner-case where a token UTXO
+      // is burned in the same block that it was created.
+      for (let i = 0; i < nonSlpTxs.length; i++) {
+        const thisTxid = nonSlpTxs[i]
+        const burnResult = await this.filterBlock.deleteBurnedUtxos(thisTxid)
+
+        if (!burnResult) {
+          console.log(`deleteBurnedUtxos() errored on on txid ${thisTxid}. Coinbase?`)
+        }
+      }
+
+      // CT 5/6/22: Making this the last code paragraph in processBlock(), to
+      // see if it fixes issues with restoring backups.
       // Create a zip-file backup every 'epoch' of blocks
       if (blockHeight % EPOCH === 0 && this.indexState !== 'phase0') {
         // Clean up stale TXs in the pTxDb.
@@ -285,21 +317,6 @@ class SlpIndexer {
         console.log(`Creating zip archive of database at block ${blockHeight}`)
         await this.dbBackup.zipDb(blockHeight, EPOCH)
       }
-
-      // Filter and sort block transactions, to make indexing more efficient
-      // and easier to debug.
-      const slpTxs = await this.filterBlock.filterAndSortSlpTxs2(
-        txs,
-        blockHeight
-      )
-      // console.log(`slpTxs: ${JSON.stringify(slpTxs, null, 2)}`)
-      console.log(`slpTxs: ${slpTxs.length}`)
-
-      // If the block has no txs after filtering for SLP txs, then return.
-      if (!slpTxs.length) return
-
-      // Progressively processes TXs in the array.
-      await this.processSlpTxs(slpTxs, blockHeight)
     } catch (err) {
       console.error('Error in processBlock()')
       throw err
@@ -378,11 +395,18 @@ class SlpIndexer {
   }
 
   // This function is used to roll back to a previous snapshot, when the indexer
-  // get stuck.
+  // gets stuck.
   // It determines the block height of the problematic parent transaction, then
   // rolls the database to a block height before that transaction.
   async handleProcessFailure (blockHeight, tx, errMsg) {
     try {
+      // Subtract one from the block height. This ensure we roll back to a block
+      // before where the problem  happened.
+      // This protects against a corner-case where restoring from a problematic
+      // backup, causes the indexer to get stuck in a look trying to restore the
+      // same problematic backup over and over.
+      blockHeight = blockHeight - 1
+
       console.log(`Block height: ${blockHeight}`)
       console.log(`errMsg: ${errMsg}`)
 

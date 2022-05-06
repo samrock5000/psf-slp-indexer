@@ -59,8 +59,10 @@ class DAG {
       }
 
       if (txidAry.length > 50) {
-        // console.log(`Large DAG detected: ${JSON.stringify(txidAry, null, 2)}`)
-        console.log(`Large DAG detected: ${txidAry.length} txs`)
+        if (txidAry.length % 10 === 0) {
+          // console.log(`Large DAG detected: ${JSON.stringify(txidAry, null, 2)}`)
+          console.log(`Large DAG detected: ${txidAry.length} txs`)
+        }
       }
 
       // If this is the genesis TX, then exit immediately.
@@ -154,6 +156,17 @@ class DAG {
 
           //
         } else if (parentTx.txid === tokenId) {
+          // Handle corner case with NFTs. 3/11/22 CT
+          // console.log(`parentTx: ${JSON.stringify(parentTx, null, 2)}`)
+          const isNFT = parentTx.tokenType !== 1
+          const groupTokenOnVin0 = parentTx.vin[0].tokenQty > 0
+          if (isNFT && !groupTokenOnVin0) {
+            endFound = true
+            outObj.isValid = false
+            outObj.dag = []
+            return outObj
+          }
+
           // GENESIS TX Found. End of DAG.
           txidAry.unshift(parentTx.txid)
 
