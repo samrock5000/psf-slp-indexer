@@ -11,7 +11,7 @@
 */
 
 // Constants use to configure indexing thresholds. Customize as needed.
-const EPOCH = 100000 // blocks between backups
+const EPOCH = 1000 // blocks between backups
 const RETRY_CNT = 10 // Number of retries before exiting the indexer
 
 // Local libraries
